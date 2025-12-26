@@ -1,24 +1,25 @@
 import asyncio
 import logging
 import random
+# --- ІМПОРТ для планувальника ---
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.client.default import DefaultBotProperties # <-- ВИПРАВЛЕННЯ 2 (додано імпорт)
+from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.markdown import hbold, hitalic
 
+
 # --- ⚙️ ГОЛОВНІ НАЛАШТУВАННЯ ---
-# Вставте сюди токен вашого бота
-BOT_TOKEN = "8184834829:AAEojo2VZKkMMSQUC8-FEi9sbepWlsIsxq4"
-# Вставте сюди ваш Chat ID, який ви отримали від @userinfobot
+BOT_TOKEN = "8355219437:AAH68-sozfjNbazl8PcY5Z1cwMhhHJe-12Y"
 YOUR_CHAT_ID = "842908820"
+GIRLFRIEND_CHAT_ID = "1201485155"
 
 
-# --- 🎨 ВІЗУАЛЬНИЙ КОНТЕНТ (тут можна все змінювати) ---
-
-# Список компліментів
+# --- 🎨 ВІЗУАЛЬНИЙ КОНТЕНТ ---
 COMPLIMENTS = [
     "Твоя посмішка просто чарівна😊",
     "Ти неймовірна!!!✨",
@@ -27,45 +28,56 @@ COMPLIMENTS = [
     "У тебе самі самі самі красиииві очі😻",
     "ТИ МЕГАА СЛЕЕЕЙ✨",
     "Сама Афродіта заздрить тобі😉❤️",
-    "Ти дуже фані і к'ют і аоаоаоаоаоаоа😫🥰"
+    "Ти дуже фані і к'ют і аоаоаоаоаоаоа😫🥰",
+    "Ти просто космос🚀💫",
+    "Як можна бути ТАКОЮ милою?? 😭💖",
+    "Естетика з Pinterest тобі заздрить 😍📸",
+    "Ти ніби створена, щоб робити день кращим ☀️",
+    "Без тебе якось… не то 😔",
+    "Ти просто вау, без варіантів 😭",
+    "Ти як затишок у людській формі 🫶",
+    "Лиш одна думка про тебе викликає посмішку💗",
+    "З тобою кожна мить - це хороший момент 💖",
+    "Ти — найкрасивіший збіг обставин у моєму житті 💕",
+    "Я не знаю, що саме у тобі таке — але ти просто аааааа 😭",
+    "Кожне твоє повідомлення — як міні-свято 🎉",
+    "Ти така неймовірна, що навіть дзеркало, кайфує від тебе 😭",
+    "Ти виглядаєш як улюблений момент, який не хочеться закінчувати 🥹",
 ]
-# Список спогадів (текст + шлях до фото)
+
 MEMORIES = [
-    (" Ти тоді приїхала до мене на роботу🥰☀️", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\1.jpg"),
-    (" Ліпший перекур, який був на роботі. Бо ти тоді була зі мною😍", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\2.jpg"),
-    (" Наша перша спільна фотка, очінь міла🤗 ", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\3.jpg"),
-    (" Шашличкіі. Ну реал мілі фото😫", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\4.jpg"),
-    (" Перша фотка в моїй кімнаті пхпхпхха", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\5.jpg"),
-    (" Очінь вайб фотка, ми тоді їхали з прогулки дамой🐱🐷", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\6.jpg"),
-    (" Мілі рижі кіт🐱. І ти дуже мілі☺️", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\7.jpg"),
-    (" Свінкіі акружилі🐷", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\8.jpg"),
-    (" Свінкі нападают🐷🐷🐷", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\9.jpg"),
-    (" СОО К'ЮЮТ АООАОА💞", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\10.jpg"),
-    (" Наша перша повноцінна прогулка💘🌇", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\11.jpg"),
-    (" Красіві закат і немовірна ти, ну багіня✨", r"C:\Users\24art\OneDrive\Рабочий стол\telegram bot\images\12.jpg")
+    (" Мій улюбелний скріншот🥰☀️", "1.jpg"),
+    (" Мега вайбова фотка😍", "2.jpg"),
+    (" Самий неймовірний світанок, який я бачив🤗 ", "3.jpg"),
+    (" Дуже люблю цю фотку😫", "4.jpg"),
+    (" Вааайб✨", "5.jpg"),
+    (" Випуск видався на славу 🐱", "6.jpg"),
+    (" Кожне фото з тобою дуже вайбове☺️", "7.jpg"),
+    (" Стратооон і ми☺️", "8.jpg"),
+    (" Наша остння фотографія, поки що😸", "9.jpg"),
+    (" Фотка в машиніі😋", "10.jpg"),
+    (" Ще один веселий момент з випуску🤩", "11.jpg"),
 ]
-# Список пісень (просто текст з посиланням)
-# ВИПРАВЛЕННЯ 1: Додано коми в кінці кожного рядка
+
 SONGS = [
-    "Вайб пісні, які асоціюються з тобою 1✨ -  https://open.spotify.com/track/3kUv3tKhdDP32S3p9tIEXT?si=735cf91d9d7045fa",
-    "Вайб пісні, які асоціюються з тобою 2😫 -  https://open.spotify.com/track/0WtMfb2f3lsdY2fB5A5w23?si=08c2d765507e4d8e",
-    "Вайб пісні, які асоціюються з тобою 3🥰 -  https://open.spotify.com/track/25Syi9wn6yR2el22t8d6v1?si=063f26de6d1544a4",
-    "Вайб пісні, які асоціюються з тобою 4🤗 -  https://open.spotify.com/track/683hR7i10a1oK3a830Kq8y?si=63a7d40e947141ad",
-    "Вайб пісні, які асоціюються з тобою 5😘 -  https://open.spotify.com/track/3eekarcy7kvN4yt5XYzCMi?si=aa5855f463324fec",
-    "Вайб пісні, які асоціюються з тобою 6❤️ -  https://open.spotify.com/track/5NEoGoS2M2Wp2ll9e0vUaG?si=0cd43c5b81de4bb5",
-    "Вайб пісні, які асоціюються з тобою 7❤️‍🔥 -  https://open.spotify.com/track/303CfhtG5IibX2i8d5P56L?si=f4841c2c36664e52",
-    "Вайб пісні, які асоціюються з тобою 8💞 -  https://open.spotify.com/track/5rurgg3iS9ZRNlYk47n5C7?si=269389288e7343c9",
-    "Вайб пісні, які асоціюються з тобою 9🥺 -  https://open.spotify.com/track/6aMoa0kMv9JDbI2UDdK3wz?si=c14e0475877c4441",
-    "Вайб пісні, які асоціюються з тобою 10🐱 -  https://open.spotify.com/track/0WSEwT5A082j8zWbt26uHc?si=54c9d5d8866144e5",
-    "Вайб пісні, які асоціюються з тобою 11😻 -  https://open.spotify.com/track/0WSEwT5A082j8zWbt26uHc?si=20e1d0f592d346ff",
-    "Вайб пісні, які асоціюються з тобою 12💗 -  https://open.spotify.com/track/2tHqaT72hGn43wJ6yVR2Dr?si=0eb363914a1c430e",
-    "Вайб пісні, які асоціюються з тобою 13🤯 -  https://open.spotify.com/track/3qFTడు0E8pPS6k7L9yK1g?si=6d9ec4826b52470f",
-    "Вайб пісні, які асоціюються з тобою 14🫣 -  https://open.spotify.com/track/7pDaYaS3y2A2y2Su6223zT?si=ab846b0a88aa488b",
-    "Вайб пісні, які асоціюються з тобою 15💘 -  https://open.spotify.com/track/25Syi9wn6yR2el22t8d6v1?si=063f26de6d1544a4",
-    "Вайб пісні, які асоціюються з тобою 16💝 -  https://open.spotify.com/track/7iEx163hAXJ3z6DBh61N6K?si=867f70b7937d45d3",
-    "Вайб пісні, які асоціюються з тобою 17💖 -  https://open.spotify.com/track/1a2iFwN4mv7I6i23S6bXp7?si=712f56f4d01b4c95",
+    "Вайб пісні, які асоціюються з тобою 1✨ -  https://open.spotify.com/track/5XtsfMFmpM401S6dbVaOQw?si=3b1e41a0c0854460",
+    "Вайб пісні, які асоціюються з тобою 2😫 -  https://open.spotify.com/track/6lYY2HktYKpV1pUamfRlU1?si=3258f77fd3d04a14",
+    "Вайб пісні, які асоціюються з тобою 3🥰 -  https://open.spotify.com/track/3dSIHREYh7yDmVrB5mX65j?si=66da79ca713a4ebf",
+    "Вайб пісні, які асоціюються з тобою 4🤗 -  https://open.spotify.com/track/0R3QFfTXRPFQUoOXtqMt9S?si=07d1f25f0ecc4054",
+    "Вайб пісні, які асоціюються з тобою 5😘 -  https://open.spotify.com/track/6dBUzqjtbnIa1TwYbyw5CM?si=e6744152a16a4c9f",
+    "Вайб пісні, які асоціюються з тобою 6❤️ -  https://open.spotify.com/track/6RiiSy9GzSwiyDEJDiMuKe?si=9bbbd9178ca7471d",
+    "Вайб пісні, які асоціюються з тобою 7❤️‍🔥 -  https://open.spotify.com/track/7h7DK2ZHIe4w0id8qkNqla?si=b317874738f649ac",
+    "Вайб пісні, які асоціюються з тобою 8💞 -  https://open.spotify.com/track/3fuyYaLhZ2RoP9eWpvfP1H?si=e1721643da194ab2",
+    "Вайб пісні, які асоціюються з тобою 9🥺 -  https://open.spotify.com/track/51Grh1RyUDcMBbpuyUIUHI?si=1e7bb3f8cd3145e7",
+    "Вайб пісні, які асоціюються з тобою 10🐱 -  https://open.spotify.com/track/2naVfDXfwpMkftwrr6GV52?si=6844d20fd9b3476a",
+    "Вайб пісні, які асоціюються з тобою 11😻 -  https://open.spotify.com/track/3JKyRgeXT4UnQms8b1bgoU?si=137da116a99a496b",
+    "Вайб пісні, які асоціюються з тобою 12💗 -  https://open.spotify.com/track/1hbciWy4syeBJeWubluRoX?si=18fdffd595134a08",
+    "Вайб пісні, які асоціюються з тобою 13🤯 -  https://open.spotify.com/track/3siwsiaEoU4Kuuc9WKMUy5?si=28971400581847c6",
+    "Вайб пісні, які асоціюються з тобою 14🫣 -  https://open.spotify.com/track/6dOtVTDdiauQNBQEDOtlAB?si=41094bfe188f4af1",
+    "Вайб пісні, які асоціюються з тобою 15💘 -  https://open.spotify.com/track/3QntMmPocNqnLoUGbVG5Jp?si=8b2875be01b4453c",
+    "Вайб пісні, які асоціюються з тобою 16💝 -  https://open.spotify.com/track/0yljUudXzjVcGEoYmLB17X?si=2f099c1f35974b55",
+    "Вайб пісні, які асоціюються з тобою 17💖 -  https://open.spotify.com/track/1RvUu2gyEx07HxyrNB8B3V?si=e07a2cb88de646b2",
 ]
-# Список ID стікерів для подяки
 THANK_YOU_STICKERS = [
     "CAACAgIAAxkBAAETBb1o6XhXdjPRlZj1pX0eBEY675j0_wAC-SUAAiH3oEjXJ5mupRpc8jYE",
     "CAACAgIAAxkBAAETBb9o6XhZbunFWWx-xMLAzEUTnV8OewACaykAAoa6oUjdta3jKo99EjYE",
@@ -89,21 +101,54 @@ THANK_YOU_STICKERS = [
     "CAACAgIAAxkBAAETBeNo6Xic4Raqp9UXx5zFyaqYsEOnqwACpjQAAocVuUkRARY4MXC2ljYE",
 ]
 
-# --- Системна частина (краще не змінювати) ---
-logging.basicConfig(level=logging.INFO)
-# ВИПРАВЛЕННЯ 2: Змінено ініціалізацію бота на новий синтаксис
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+# --- Покращене налаштування логування ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+# --- Системна частина ---
+session = AiohttpSession(proxy="http://proxy.server:3128")
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"), session=session)
 dp = Dispatcher()
 
 class UserState(StatesGroup):
     waiting_for_mood = State()
     waiting_for_wish = State()
 
-# --- 🎬 СЦЕНАРІЙ РОБОТИ БОТА ---
+# --- Middleware для логування команд ---
+async def command_logger_middleware(handler, event, data):
+    if isinstance(event, types.Message) and event.text:
+        user_id = event.from_user.id
+        user_name = event.from_user.first_name
+        command_text = event.text
+        try:
+            is_girlfriend = (user_id == int(GIRLFRIEND_CHAT_ID))
+            who = "Дівчина" if is_girlfriend else "Інший користувач"
+        except (ValueError, TypeError):
+            who = "Невідомий користувач"
+        logging.info(f"Користувач '{who}' ({user_name}, ID: {user_id}) виконав команду: '{command_text}'")
+    return await handler(event, data)
 
+# --- Реєстрація Middleware ---
+dp.message.middleware(command_logger_middleware)
+
+
+# --- Щоденний комплімент ---
+async def send_daily_compliment():
+    try:
+        compliment_text = random.choice(COMPLIMENTS)
+        await bot.send_message(chat_id=GIRLFRIEND_CHAT_ID, text=compliment_text)
+        await bot.send_message(chat_id=YOUR_CHAT_ID, text=f"✅ Щоденний комплімент успішно надіслано:\n\n_{compliment_text}_")
+        logging.info(f"Sent daily compliment to {GIRLFRIEND_CHAT_ID}")
+    except Exception as e:
+        await bot.send_message(chat_id=YOUR_CHAT_ID, text=f"❌ Не вдалося надіслати щоденний комплімент. Помилка: {e}")
+        logging.error(f"Failed to send daily compliment: {e}")
+
+# --- СЦЕНАРІЙ РОБОТИ БОТА ---
 @dp.message(Command("start"))
 async def send_welcome(message: types.Message):
-    # Створюємо красиву клавіатуру 2х2 + 1
     keyboard = types.ReplyKeyboardMarkup(
         keyboard=[
             [
@@ -120,13 +165,12 @@ async def send_welcome(message: types.Message):
         input_field_placeholder="Обирай, що тобі до душі ✨"
     )
     await message.answer(
-        f"Прівєєт Анюют! ❤️\n\n"
+        f"Привііт! ❤️\n\n"
         "Я твій особистий бот, створений, щоб дарувати тобі радість. "
         "Обирай будь-яку кнопочку нижче 👇",
         reply_markup=keyboard
     )
-#
-# Обробники кнопок з контентом
+
 @dp.message(F.text == "💌 Комплімент для тебе")
 async def send_compliment(message: types.Message):
     await message.answer(random.choice(COMPLIMENTS), parse_mode=None)
@@ -139,13 +183,12 @@ async def send_memory(message: types.Message):
         await bot.send_photo(chat_id=message.chat.id, photo=photo, caption=text)
     except Exception as e:
         await message.answer("Ой, здається, я не можу знайти це фото... Але спогад все одно теплий! 🥰")
-        logging.error(f"Error sending photo: {e}")
+        logging.error(f"Error sending photo '{photo_path}': {e}")
 
 @dp.message(F.text == "🎵 Вайб пісні")
 async def send_song(message: types.Message):
     await message.answer(random.choice(SONGS), parse_mode=None)
 
-# Обробка настрою
 @dp.message(F.text == "😊 Як у тебе настрій?")
 async def ask_for_mood(message: types.Message, state: FSMContext):
     await message.answer("Звісно! Розкажи, як ти себе почуваєш? Що у тебе на душі?")
@@ -153,16 +196,11 @@ async def ask_for_mood(message: types.Message, state: FSMContext):
 
 @dp.message(UserState.waiting_for_mood)
 async def forward_mood_to_me(message: types.Message, state: FSMContext):
-    await bot.send_message(
-        YOUR_CHAT_ID,
-        f"😊 {hbold('Настрій твоєї Анюти:')}\n\n"
-        f"{hitalic(message.text)}"
-    )
+    await bot.send_message(YOUR_CHAT_ID, f"😊 {hbold('Настрій Алли:')}\n\n{hitalic(message.text)}")
     await message.answer("Дякую, що поділилася! ❤️ Я все передав 😉")
     await bot.send_sticker(message.chat.id, sticker=random.choice(THANK_YOU_STICKERS))
     await state.clear()
 
-# Обробка бажань
 @dp.message(F.text == "💖 Розкажи про побажання, або передай мені послання")
 async def ask_for_wish(message: types.Message, state: FSMContext):
     await message.answer("О, це цікаво! Чого б тобі зараз хотілося найбільше? Мрій сміливо! ✨")
@@ -170,17 +208,24 @@ async def ask_for_wish(message: types.Message, state: FSMContext):
 
 @dp.message(UserState.waiting_for_wish)
 async def forward_wish_to_me(message: types.Message, state: FSMContext):
-    await bot.send_message(
-        YOUR_CHAT_ID,
-        f"💖 {hbold('Бажання Анюти:')}\n\n"
-        f"{hitalic(message.text)}"
-    )
+    await bot.send_message(YOUR_CHAT_ID, f"💖 {hbold('Бажання Алли:')}\n\n{hitalic(message.text)}")
     await message.answer("Записав! Спробую натякнути кому треба 🤫✨")
     await bot.send_sticker(message.chat.id, sticker=random.choice(THANK_YOU_STICKERS))
     await state.clear()
 
-# Запуск бота
+# --- ТИМЧАСОВА ФУНКЦІЯ: Перегляд стікера по ID ---
+@dp.message(F.text.startswith("CAAC"))
+async def preview_sticker(message: types.Message):
+    try:
+        await message.answer_sticker(sticker=message.text)
+    except Exception:
+        await message.answer("❌ Це неправильний ID стікера.")
+
+# --- Запуск бота разом з планувальником ---
 async def main():
+    scheduler = AsyncIOScheduler(timezone="Europe/Kiev")
+    scheduler.add_job(send_daily_compliment, 'cron', hour=21, minute=40)
+    scheduler.start()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
